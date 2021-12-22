@@ -1,0 +1,230 @@
+---
+title: "Webscraping Final Project"
+author: "Maryam Khan"
+date: "12/21/2021"
+output:
+  prettydoc::html_pretty:
+    theme: cayman
+    highlight: github
+---
+
+```{r include=FALSE}
+
+rm(list = ls())
+
+#Libraries
+
+library(rvest)
+library(data.table)
+library(jsonlite)
+library(httr)
+library(xml2)
+library(data.table)
+library(esquisse)
+library(tidyverse)
+library(ggplot2)
+library(ggthemes)
+
+```
+
+
+```{r include=FALSE}
+
+#Main URL
+url <- "http://makeup-api.herokuapp.com/api/v1/products.json"
+
+#Sample URL
+brand_url <- "?brand=maybelline"
+full_url <- paste0(url, brand_url)
+
+#API
+api <- GET(url)
+api$status_code
+
+char <- rawToChar(api$content)
+data_json <- fromJSON(char, flatten = TRUE)
+testbrand <- data.table(data_json$brand)
+
+```
+
+```{r include=FALSE}
+#Function to get all data
+brand_info <- function(url) {
+  api <- GET(url)
+  char <- rawToChar(api$content)
+  data_json <- fromJSON(char, flatten = TRUE)
+  df <- data.table("Brand" = data_json$brand, "Name" = data_json$name, "Price" = data_json$price, "Type" = data_json$product_type, "Rating" = data_json$rating)
+
+}
+
+```
+
+```{r include=FALSE}
+
+brandurl <- paste0(url, c("?brand=covergirl", "?brand=nyx", "?brand=smashbox", "?brand=benefit", "?brand=l'oreal","?brand=maybelline" , "?brand=revlon"))
+brand_combine <- lapply(brandurl, brand_info)
+
+final_df <- rbindlist(brand_combine)
+
+final_df$Price <- as.numeric(as.character(final_df$Price))
+```
+
+```{r include=FALSE}
+
+# Sub dataset for Lipstick
+
+lipstick <- filter(final_df, Type == "lipstick")
+
+
+lipstick <- filter(lipstick, Rating > 0)
+
+lipstick <- filter(lipstick, Price > 0)
+
+lipstick1 <- lipstick %>% group_by(Brand) %>% select(Price,Rating) %>% summarise_all (mean, na.rm= TRUE)
+
+lipstick1$Type <- c("lipstick")
+
+
+# Sub dataset for Foundation
+
+foundation <- filter(final_df, Type == "foundation")
+
+foundation <- filter(foundation, Rating > 0)
+
+foundation <- filter(foundation, Price > 0)
+
+foundation1 <- foundation %>% group_by(Brand) %>% select(Price,Rating) %>% summarise_all (mean, na.rm= TRUE)
+
+foundation1$Type <- c("foundation")
+
+
+
+# Sub dataset for Eyeliner
+
+eyeliner <- filter(final_df, Type == "eyeliner")
+
+eyeliner <- filter(eyeliner, Rating > 0)
+
+eyeliner <- filter(eyeliner, Price > 0)
+
+eyeliner1 <- eyeliner %>% group_by(Brand) %>% select(Price,Rating) %>% summarise_all (mean, na.rm= TRUE)
+
+eyeliner1$Type <- c("eyeliner")
+
+
+# Joining all for visualization
+
+brand_comparison<- rbind(lipstick1,foundation1,eyeliner1)
+
+
+
+```
+
+```{r include=FALSE}
+
+reg1 <- lm( Price~ Rating, data = final_df, vcov = "hetero")
+
+summary(reg1)
+
+#Visualizations
+
+Figure1 <- ggplot(final_df, aes(x="",y="", fill=Brand)) +
+  geom_bar(stat="identity") +
+  coord_polar("y", start=0) +
+  theme_void()+
+  ggtitle("Brand Product Distribution")
+
+Figure2 <-ggplot(final_df) +
+ aes(x = Type, fill = Brand) +
+ geom_bar() +
+ theme_minimal() +
+  geom_bar(position="stack")+
+  ggtitle("Popular Products in each Brand") +
+  theme_stata()
+
+Figure3 <- ggplot(brand_comparison, aes(fill=Type, y=Price, x=Brand)) + 
+    geom_bar(position="dodge", stat="identity") +
+  ggtitle("Brand Price Comparison")+
+    theme_stata()
+
+Figure4 <- ggplot(brand_comparison, aes(fill=Type, y=Rating, x=Brand)) + 
+    geom_bar(position="dodge", stat="identity") +
+  ggtitle("Brand Rating Comparison")+
+theme_stata()
+
+
+
+
+
+```
+
+
+
+## Overview
+
+The purpose of this project was to extract data an API and convert it into a data frame so that we can conduct an analysis on it. For my project I chose the 
+[**makeupAPI**](https://makeup-api.herokuapp.com)
+. To do a price comparison between different makeup products and brands.
+
+
+## API Data Loading
+
+I used the GET feature to connect to the API and download data into the environment. The data, however, had to be cleaned and sorted for the purpose of my analysis. Price column had to be changed into numeric form and I used the group_by features to make sub tables and made visualizations using those tables. 
+
+I used functions so that data from multiple brands would be loaded automatically in a loop by using lapply and rbindlist. This helped create my final_df table.
+
+```{r echo=FALSE}
+head(final_df)
+```
+
+For this project I compared only 7 brands listed below:
+
+  - Covergirl
+  - NYX
+  - Smashbox
+  - Benefit
+  - L'oreal
+  - Maybelline
+  - Revlon
+  
+To make the visualization I had to filter and group the data according to type and made separate data tables for those. 
+
+## Visualization 1
+
+```{r echo=FALSE}
+Figure1
+```
+
+This visualization shows which brand has the most makeup products. From the pie chart we can see that the NYX has the biggest range followed by Covergirl and Maybelline. 
+
+
+## Visualization 2
+
+```{r echo=FALSE}
+Figure2
+```
+
+This stacked bar chart shows which product is popular in which brand. We can see that nyx dominates the makeup market for most of the products. L'oreal is more popular in nail polishes and maybelline is more popular for eyeshadows.
+
+
+## Visualization 3 
+
+```{r echo=FALSE}
+Figure3
+```
+
+This grouped bar charts gives an average price comparison for eyeliner, foundation and lipsticks. In foundations, L'oreal has the most expensive one followed by Revlon. It can also be seen that nyx products are the cheapest. 
+
+
+## Visualization 4
+
+```{r echo=FALSE}
+Figure4
+```
+This grouped bar chart shows the rating for eyeliner, foundation and lipstick for the selected brands. Covergirl has the highest rated lipstick whereas, nyx has the lowest rated lipsticks. 
+
+
+
+## Conclusion
+
+To conclude, this project shows us how we can compare makeup prices and rating of all makeup brands and products.
